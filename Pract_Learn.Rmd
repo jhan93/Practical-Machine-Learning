@@ -1,0 +1,87 @@
+---
+title: "Practical Machine Learning"
+author: "Joshua Han"
+date: "5/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/jhan/Desktop/Coursera/Practical Machine Learning")
+test <- read.csv('pml-testing.csv', stringsAsFactors = FALSE)
+train <- read.csv('pml-training.csv', stringsAsFactors = FALSE)
+#install.packages('caret')
+library(caret)
+set.seed(0)
+
+```
+
+## Project Summary
+
+In this project I will predict the manner in which the users did the exercise - the 'classe' variable in the training set. After cross validating and developing a machine learning algorithm, I will predict on our test data set which was provided.
+
+## Data Prepping and Preprocessing
+After reading in the data, I chose to bind the test and training data together so that the structure of each variable is the same throughout both the training and test set. I still kept tabs on the training and test set by setting the 'classe' variable in the test set to be 'TEST'. Support Vector Machines is the first algorithm I hope to try since its classification is greater than other types of algorithms. SVM does not play well with NA or missing data - thus I got rid of variables that are missing. Out of the 159 variables, there were still about 53 variables to use. 
+```{r mean}
+#Exploratory Analysis
+
+test2 <- subset(test, select = -problem_id)
+test2$classe <- 'TEST'
+merged <- rbind(train, test2)
+
+col.has.na2 <- apply(merged, 2, function(x){any(is.na(x))})
+col.has.na <- col.has.na2[col.has.na2==TRUE]
+
+###We know all the missing values is of type num or na
+df_non2 <- (merged[,!(names(merged) %in% (names(col.has.na)))])
+df_non2 <- subset(df_non2, select= -c(1,2,3,4,5,6))
+
+
+df_non <- subset(df_non2, classe!='TEST')
+o_test <- subset(df_non2, classe == 'TEST')
+
+
+df_non$classe = factor(ifelse(df_non$classe == 'A', '0',
+                              ifelse(df_non$classe == 'B', '1',
+                                     ifelse(df_non$classe == 'C', '2',
+                                            ifelse(df_non$classe == 'D', '3',
+                                                   ifelse(df_non$classe == 'E', '4', 'test'))))))
+
+
+```
+
+
+
+## Model Selection and Cross Validation
+
+The code below represents the thought process of modeling the data. I initially wanted to create a partition to cross validate our model. I randomly chose 80% of our training data to predict on the remaining 20% of our training data. I tried out three different types of SVM options: svmLinear, svmRadial and svmPoly. I tested the model and their predictions to the remaining 20% and turns out the svmPoly works best. 
+```{r model, message=FALSE, warning=FALSE, paged.print=FALSE}
+inTrain <- createDataPartition(y = df_non$classe, p = 0.8, list = FALSE)
+training <- df_non[inTrain,]
+testing <- df_non[-inTrain,]
+
+modelFit <- train(classe~., data = training, preProcess = c('center', 'scale'), method = 'svmLinear')
+modelFit2 <- train(classe~., data = training, preProcess = c('center', 'scale'), method = 'svmRadial')
+modelFit3 <- train(classe~., data = training, preProcess = c('center', 'scale'), method = 'svmPoly')
+pred <- predict(modelFit, newdata = testing[,-54], na.action = na.fail)
+table(pred, testing$classe)
+pred2 <- predict(modelFit2, newdata = testing[,-54], na.action = na.fail)
+table(pred2, testing$classe)
+pred3 <- predict(modelFit3, newdata = testing[,-54], na.action = na.fail)
+table(pred3, testing$classe)
+
+
+pred <- predict(modelFit, newdata = o_test[,-54], na.action = na.fail) #last
+pred2 <- predict(modelFit2, newdata = o_test[,-54], na.action = na.fail) #second
+pred3 <- predict(modelFit3, newdata = o_test[,-54], na.action = na.fail) #winner
+```
+
+## Test Case Results
+After running the models, svmPoly works best after comparing it to our actual values. Using that model (modlFit3), I predicted the values in our test cases below:
+```{r model2}
+ifelse(pred3 == '0', 'A',
+       ifelse(pred3 == '1', 'B',
+              ifelse(pred3 == '2', 'C',
+                     ifelse(pred3 == '3', 'D',
+                            ifelse(pred3 == '4', 'E', 'WHAKSJF')))))
+```
